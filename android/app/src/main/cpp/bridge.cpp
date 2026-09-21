@@ -74,7 +74,7 @@ JNIEXPORT void JNICALL Java_dev_ritm_daw_Native_setNotes(JNIEnv* env, jobject, j
     tl->ppq = ppq;
     tl->loopTicks = loopTicks;
     jsize n = env->GetArrayLength(notes);
-    std::vector<jint> buf(size_t(n));
+    std::vector<jint> buf(static_cast<size_t>(n));
     if (n > 0) env->GetIntArrayRegion(notes, 0, n, buf.data());
     for (jsize i = 0; i + 3 < n; i += 4) {
         ritm::Event e;
