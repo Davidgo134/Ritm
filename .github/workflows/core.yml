@@ -1,0 +1,22 @@
+name: core
+
+on:
+  push:
+    branches: [main]
+    paths: ['core/**', 'tools/**', '.github/workflows/core.yml']
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install deps
+        run: sudo apt-get update && sudo apt-get install -y zlib1g-dev cmake
+      - name: Configure (ASan+UBSan)
+        run: cmake -S core -B build -DCMAKE_BUILD_TYPE=Debug -DCMAKE_CXX_FLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer"
+      - name: Build
+        run: cmake --build build -j
+      - name: Test
+        run: ctest --test-dir build --output-on-failure
