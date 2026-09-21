@@ -20,6 +20,7 @@ struct Timeline {
     double bpm = 120;
     int ppq = 96;
     double lengthTicks = 0;
+    double loopTicks = 0;
     std::vector<Event> events;
 
     static Timeline fromProject(const Project& p);
@@ -29,10 +30,11 @@ class Engine {
 public:
     explicit Engine(int sampleRate = 48000);
 
-    void setTimeline(std::shared_ptr<const Timeline> t);
+    void setTimeline(std::shared_ptr<const Timeline> t, bool keepPosition = false);
     void setBpm(double bpm);
     void setLoop(bool on);
     void play();
+    void pause();
     void stop();
     void seekTicks(double tick);
     bool playing() const { return playing_.load(); }
@@ -66,6 +68,7 @@ private:
     std::atomic<double> pos_{0};
     std::atomic<double> bpm_{120};
     std::atomic<bool> seekPending_{false};
+    std::atomic<bool> killVoices_{true};
     std::atomic<double> seekTo_{0};
     size_t next_ = 0;
     Voice voices_[kVoices];

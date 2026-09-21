@@ -40,24 +40,28 @@ Timeline Timeline::fromProject(const Project& p) {
 
 Engine::Engine(int sampleRate) : sr_(sampleRate) {}
 
-void Engine::setTimeline(std::shared_ptr<const Timeline> t) {
+void Engine::setTimeline(std::shared_ptr<const Timeline> t, bool keepPosition) {
     std::lock_guard<std::mutex> g(m_);
     tl_ = std::move(t);
-    if (tl_) bpm_.store(tl_->bpm);
-    seekTo_.store(0);
+    if (tl_ && !keepPosition) bpm_.store(tl_->bpm);
+    seekTo_.store(keepPosition ? pos_.load() : 0.0);
+    killVoices_.store(!keepPosition);
     seekPending_.store(true);
 }
 
 void Engine::setBpm(double bpm) { bpm_.store(std::max(10.0, std::min(999.0, bpm))); }
 void Engine::setLoop(bool on) { loop_.store(on); }
 void Engine::play() { playing_.store(true); }
+void Engine::pause() { playing_.store(false); }
 void Engine::stop() {
     playing_.store(false);
     seekTo_.store(0);
+    killVoices_.store(true);
     seekPending_.store(true);
 }
 void Engine::seekTicks(double tick) {
     seekTo_.store(std::max(0.0, tick));
+    killVoices_.store(true);
     seekPending_.store(true);
 }
 
@@ -97,7 +101,8 @@ void Engine::process(float* out, int frames) {
         pos_.store(seekTo_.load());
         next_ = 0;
         while (next_ < tl.events.size() && tl.events[next_].tick < pos_.load()) ++next_;
-        for (auto& v : voices_) v.active = false;
+        if (killVoices_.exchange(false))
+            for (auto& v : voices_) v.active = false;
     }
 
     const double bpm = bpm_.load();
@@ -116,9 +121,11 @@ void Engine::process(float* out, int frames) {
                 ++next_;
             }
             pos += ticksPerSample;
-            if (tl.lengthTicks > 0 && pos >= tl.lengthTicks + tl.ppq) {
-                if (loop_.load()) {
-                    pos = 0;
+            const double endTick = tl.loopTicks > 0 ? tl.loopTicks : tl.lengthTicks + tl.ppq;
+            if (endTick > 0 && pos >= endTick) {
+                if (loop_.load() || tl.loopTicks > 0) {
+                    pos -= endTick;
+                    if (pos < 0) pos = 0;
                     next_ = 0;
                 } else {
                     playing_.store(false);
